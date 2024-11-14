@@ -14,10 +14,9 @@ enum Function {
     More(Box<Function>, Box<Function>),
     For(Box<Function>, Box<Function>, Box<Function>, Vec<Function>),
     If(Box<Function>, Vec<Function>),
-    DefineFn(String, Vec<String>, Vec<Function>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct UserFunction {
     args: Vec<String>,
     body: Vec<Function>,
@@ -92,9 +91,6 @@ fn eval_func(
                 }
             }
         }
-        Function::DefineFn(name, args, body) => {
-            user_functions.insert(name, UserFunction { args, body });
-        }
     };
 
     0
@@ -155,18 +151,11 @@ macro_rules! func {
     (if!($condition:expr, $($f:expr),* $(,)?)) => {
         Function::If(Box::new($condition), vec![$($f),*])
     };
-    (define_fn!($name: literal, args!($($arg:literal),* $(,)?), $($f:expr),* $(,)?)) => {
-        Function::DefineFn(String::from($name), vec![$(String::from($arg)),*], vec![$($f),*])
-    }
+
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let program = vec![
-        func!(define_fn!(
-            "funny",
-            args!("num"),
-            func!(print!(ident!("num")))
-        )),
         func!(@define "a" func!(5)),
         func!(if!(
                 func!(equal!(func!(5), ident!("a"))),
