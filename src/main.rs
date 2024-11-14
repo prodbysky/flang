@@ -14,6 +14,7 @@ enum Function {
     More(Box<Function>, Box<Function>),
     For(Box<Function>, Box<Function>, Box<Function>, Vec<Function>),
     If(Box<Function>, Vec<Function>),
+    While(Box<Function>, Vec<Function>),
 }
 
 fn eval_func(vars: &mut HashMap<String, i32>, f: Function) -> i32 {
@@ -53,6 +54,13 @@ fn eval_func(vars: &mut HashMap<String, i32>, f: Function) -> i32 {
                 vars.insert(String::from("_i"), counter);
             }
             vars.remove(&String::from("_i"));
+        }
+        Function::While(cond, body) => {
+            while eval_func(vars, *cond.clone()) != 0 {
+                for f in &body {
+                    eval_func(vars, f.clone());
+                }
+            }
         }
         Function::Equal(a, b) => {
             return (eval_func(vars, *a) == eval_func(vars, *b)) as i32;
@@ -140,6 +148,15 @@ fn parse_func(str: &str, i: &mut usize) -> Option<Function> {
                 Box::new(increment),
                 body,
             ))
+        }
+        "while" => {
+            *i += 1;
+            let cond = parse_func(str, i)?;
+            let mut body = vec![];
+            while *i < chars.len() && chars[*i] != ')' {
+                body.push(parse_func(str, i)?);
+            }
+            Some(Function::While(Box::new(cond), body))
         }
         "if" => {
             *i += 1;
