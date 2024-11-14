@@ -13,6 +13,7 @@ enum Function {
     Less(Box<Function>, Box<Function>),
     More(Box<Function>, Box<Function>),
     For(Box<Function>, Box<Function>, Box<Function>, Vec<Function>),
+    If(Box<Function>, Vec<Function>),
 }
 
 fn eval_func(vars: &mut HashMap<String, i32>, f: Function) -> i32 {
@@ -64,6 +65,13 @@ fn eval_func(vars: &mut HashMap<String, i32>, f: Function) -> i32 {
         }
         Function::More(a, b) => {
             return (eval_func(vars, *a) > eval_func(vars, *b)) as i32;
+        }
+        Function::If(condition, body) => {
+            if eval_func(vars, *condition) != 0 {
+                for f in &body {
+                    eval_func(vars, f.clone());
+                }
+            }
         }
     };
 
@@ -120,12 +128,20 @@ macro_rules! func {
     (more!($left:expr, $right:expr)) => {
         Function::More(Box::new($left), Box::new($right))
     };
+    (if!($condition:expr, $($f:expr),* $(,)?)) => {
+        Function::If(Box::new($condition), vec![$($f),*])
+    }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let program = vec![
-        func!(for!(func!(5), func!(print!(ident!("_i"))))),
-        // func!(@define "a" func!(5)),
+        func!(@define "a" func!(5)),
+        func!(if!(
+                func!(equal!(func!(5), ident!("a"))),
+                func!(print!(func!(69)))
+            )
+        ),
+        // func!(for!(func!(5), func!(print!(ident!("_i"))))),
         // func!(@define "b" func!(add!(ident!("a"), func!(10)))),
         // func!(print!(ident!("a"), ident!("b"))),
     ];
