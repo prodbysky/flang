@@ -1,6 +1,6 @@
-use std::{collections::HashMap, error::Error, fmt::Display};
+use std::{collections::HashMap, error::Error};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Function {
     Define(String, Box<Function>),
     Add(Box<Function>, Box<Function>),
@@ -8,6 +8,7 @@ enum Function {
     Number(i32),
     Ident(String),
     Print(Vec<Function>),
+    For(Box<Function>, Box<Function>, Box<Function>, Vec<Function>),
 }
 
 fn eval_func(vars: &mut HashMap<String, i32>, f: Function) -> i32 {
@@ -31,6 +32,22 @@ fn eval_func(vars: &mut HashMap<String, i32>, f: Function) -> i32 {
                 print!("{} ", eval_func(vars, val));
             }
             println!();
+        }
+        Function::For(begin, end, increment, body) => {
+            let mut counter = eval_func(vars, *begin);
+            let end = eval_func(vars, *end);
+            let increment = eval_func(vars, *increment);
+
+            vars.insert(String::from("_i"), counter);
+
+            while counter < end {
+                for f in &body {
+                    eval_func(vars, f.clone());
+                }
+                counter += increment;
+                vars.insert(String::from("_i"), counter);
+            }
+            vars.remove(&String::from("_i"));
         }
     };
 
@@ -66,6 +83,15 @@ macro_rules! func {
     (sub!($left:expr, $right:expr)) => {
         Function::Sub(Box::new($left), Box::new($right))
     };
+    (for!($start:expr, $end:expr, $incr:expr, $($f:expr),* $(,)?)) => {
+        Function::For(Box::new($start), Box::new($end), Box::new($incr), vec![$($f),*])
+    };
+    (for!($start:expr, $end:expr, $($f:expr),* $(,)?)) => {
+        Function::For(Box::new($start), Box::new($end), Box::new(1), vec![$($f),*])
+    };
+    (for!($end:expr, $($f:expr),* $(,)?)) => {
+        Function::For(Box::new(Function::Number(0)), Box::new($end), Box::new(Function::Number(1)), vec![$($f),*])
+    };
     (print!($($arg:expr),* $(,)?)) => {
         Function::Print(vec![$($arg),*])
     };
@@ -73,9 +99,10 @@ macro_rules! func {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let program = vec![
-        func!(@define "a" func!(5)),
-        func!(@define "b" func!(add!(ident!("a"), func!(10)))),
-        func!(print!(ident!("a"), ident!("b"))),
+        func!(for!(func!(5), func!(print!(ident!("_i"))))),
+        // func!(@define "a" func!(5)),
+        // func!(@define "b" func!(add!(ident!("a"), func!(10)))),
+        // func!(print!(ident!("a"), ident!("b"))),
     ];
     run(program);
     Ok(())
