@@ -134,18 +134,93 @@ macro_rules! func {
 
 }
 
+fn parse_func(str: &str, i: &mut usize) -> Option<Function> {
+    let chars: Vec<_> = str.chars().collect();
+
+    // Skip whitespace and closing parentheses
+    while *i < chars.len() && (chars[*i].is_whitespace() || chars[*i] == ')') {
+        *i += 1;
+    }
+
+    // If we've reached the end of the string, return None to signal end of parsing
+    if *i >= chars.len() {
+        return None;
+    }
+
+    // Check if we're parsing a number
+    if chars[*i].is_ascii_digit() {
+        let begin = *i;
+        while *i < chars.len() && chars[*i].is_ascii_digit() {
+            *i += 1;
+        }
+        return Some(Function::Number(str[begin..*i].parse().unwrap()));
+    }
+
+    // Check if we're parsing an identifier
+    let valid_ident_char = |c: char| c.is_ascii_alphabetic() || c == '_';
+    let begin = *i;
+
+    while *i < chars.len() && valid_ident_char(chars[*i]) {
+        *i += 1;
+    }
+
+    let ident = &str[begin..*i];
+
+    // If the identifier is empty, return None to signal no more valid content to parse
+    if ident.is_empty() {
+        return None;
+    }
+
+    match ident {
+        "define" => {
+            *i += 1;
+            // Find the closing parenthesis after the "define" arguments
+            if let Some(pos) = str[*i..].find(')') {
+                let closing = pos + *i;
+                let args: Vec<_> = str[*i..closing].split_whitespace().collect();
+                *i += args[0].len() + 1;
+                Some(Function::Define(
+                    args[0].to_string(),
+                    Box::new(parse_func(str, i)?),
+                ))
+            } else {
+                None // If we don't find a closing parenthesis, return None
+            }
+        }
+        "add" => {
+            *i += 1;
+        }
+        _ => None,
+    }
+}
+
+fn parse(str: String) -> Vec<Function> {
+    let mut i = 0;
+    let mut fs = vec![];
+    while i < str.len() {
+        if let Some(func) = parse_func(&str, &mut i) {
+            fs.push(func);
+        } else {
+            break;
+        }
+    }
+    fs
+}
 fn main() -> Result<(), Box<dyn Error>> {
-    let program = vec![
-        func!(@define "a" func!(5)),
-        func!(if!(
-                func!(equal!(func!(5), ident!("a"))),
-                func!(print!(func!(69)))
-            )
-        ),
-        // func!(for!(func!(5), func!(print!(ident!("_i"))))),
-        // func!(@define "b" func!(add!(ident!("a"), func!(10)))),
-        // func!(print!(ident!("a"), ident!("b"))),
-    ];
-    run(program);
+    let source = "define(a 69)";
+    let program = parse(source.to_string());
+    dbg!(program);
+    // let program = vec![
+    //     func!(@define "a" func!(5)),
+    //     func!(if!(
+    //             func!(equal!(func!(5), ident!("a"))),
+    //             func!(print!(func!(69)))
+    //         )
+    //     ),
+    // func!(for!(func!(5), func!(print!(ident!("_i"))))),
+    // func!(@define "b" func!(add!(ident!("a"), func!(10)))),
+    // func!(print!(ident!("a"), ident!("b"))),
+    // ];
+    // run(program);
     Ok(())
 }
