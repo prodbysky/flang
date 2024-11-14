@@ -8,6 +8,10 @@ enum Function {
     Number(i32),
     Ident(String),
     Print(Vec<Function>),
+    Equal(Box<Function>, Box<Function>),
+    NotEqual(Box<Function>, Box<Function>),
+    Less(Box<Function>, Box<Function>),
+    More(Box<Function>, Box<Function>),
     For(Box<Function>, Box<Function>, Box<Function>, Vec<Function>),
 }
 
@@ -49,6 +53,18 @@ fn eval_func(vars: &mut HashMap<String, i32>, f: Function) -> i32 {
             }
             vars.remove(&String::from("_i"));
         }
+        Function::Equal(a, b) => {
+            return (eval_func(vars, *a) == eval_func(vars, *b)) as i32;
+        }
+        Function::NotEqual(a, b) => {
+            return (eval_func(vars, *a) != eval_func(vars, *b)) as i32;
+        }
+        Function::Less(a, b) => {
+            return (eval_func(vars, *a) < eval_func(vars, *b)) as i32;
+        }
+        Function::More(a, b) => {
+            return (eval_func(vars, *a) > eval_func(vars, *b)) as i32;
+        }
     };
 
     0
@@ -71,15 +87,12 @@ macro_rules! func {
     ($num:literal) => {
         Function::Number($num)
     };
-
     (@define $name:literal $right:expr) => {
         Function::Define(String::from($name), Box::new($right))
     };
-
     (add!($left:expr, $right:expr)) => {
         Function::Add(Box::new($left), Box::new($right))
     };
-
     (sub!($left:expr, $right:expr)) => {
         Function::Sub(Box::new($left), Box::new($right))
     };
@@ -94,6 +107,18 @@ macro_rules! func {
     };
     (print!($($arg:expr),* $(,)?)) => {
         Function::Print(vec![$($arg),*])
+    };
+    (equal!($left:expr, $right:expr)) => {
+        Function::Equal(Box::new($left), Box::new($right))
+    };
+    (not_equal!($left:expr, $right:expr)) => {
+        Function::NotEqual(Box::new($left), Box::new($right))
+    };
+    (less!($left:expr, $right:expr)) => {
+        Function::Less(Box::new($left), Box::new($right))
+    };
+    (more!($left:expr, $right:expr)) => {
+        Function::More(Box::new($left), Box::new($right))
     };
 }
 
