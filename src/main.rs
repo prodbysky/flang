@@ -1,4 +1,4 @@
-use std::{collections::HashMap, error::Error};
+use std::{collections::HashMap, error::Error, fs::read_to_string};
 
 #[derive(Debug, Clone)]
 enum Function {
@@ -78,76 +78,17 @@ fn eval_func(vars: &mut HashMap<String, i32>, f: Function) -> i32 {
     0
 }
 
-fn run(module: Vec<Function>) {
-    let mut vars = HashMap::new();
-    for func in module {
-        eval_func(&mut vars, func);
-    }
-    dbg!(vars);
-}
-
-macro_rules! ident {
-    ($name:literal) => {
-        Function::Ident(String::from($name))
-    };
-}
-macro_rules! func {
-    ($num:literal) => {
-        Function::Number($num)
-    };
-    (@define $name:literal $right:expr) => {
-        Function::Define(String::from($name), Box::new($right))
-    };
-    (add!($left:expr, $right:expr)) => {
-        Function::Add(Box::new($left), Box::new($right))
-    };
-    (sub!($left:expr, $right:expr)) => {
-        Function::Sub(Box::new($left), Box::new($right))
-    };
-    (for!($start:expr, $end:expr, $incr:expr, $($f:expr),* $(,)?)) => {
-        Function::For(Box::new($start), Box::new($end), Box::new($incr), vec![$($f),*])
-    };
-    (for!($start:expr, $end:expr, $($f:expr),* $(,)?)) => {
-        Function::For(Box::new($start), Box::new($end), Box::new(1), vec![$($f),*])
-    };
-    (for!($end:expr, $($f:expr),* $(,)?)) => {
-        Function::For(Box::new(Function::Number(0)), Box::new($end), Box::new(Function::Number(1)), vec![$($f),*])
-    };
-    (print!($($arg:expr),* $(,)?)) => {
-        Function::Print(vec![$($arg),*])
-    };
-    (equal!($left:expr, $right:expr)) => {
-        Function::Equal(Box::new($left), Box::new($right))
-    };
-    (not_equal!($left:expr, $right:expr)) => {
-        Function::NotEqual(Box::new($left), Box::new($right))
-    };
-    (less!($left:expr, $right:expr)) => {
-        Function::Less(Box::new($left), Box::new($right))
-    };
-    (more!($left:expr, $right:expr)) => {
-        Function::More(Box::new($left), Box::new($right))
-    };
-    (if!($condition:expr, $($f:expr),* $(,)?)) => {
-        Function::If(Box::new($condition), vec![$($f),*])
-    };
-
-}
-
 fn parse_func(str: &str, i: &mut usize) -> Option<Function> {
     let chars: Vec<_> = str.chars().collect();
 
-    // Skip whitespace and closing parentheses
     while *i < chars.len() && (chars[*i].is_whitespace() || chars[*i] == ')') {
         *i += 1;
     }
 
-    // If we've reached the end of the string, return None to signal end of parsing
     if *i >= chars.len() {
         return None;
     }
 
-    // Check if we're parsing a number
     if chars[*i].is_ascii_digit() {
         let begin = *i;
         while *i < chars.len() && chars[*i].is_ascii_digit() {
@@ -156,41 +97,87 @@ fn parse_func(str: &str, i: &mut usize) -> Option<Function> {
         return Some(Function::Number(str[begin..*i].parse().unwrap()));
     }
 
-    // Check if we're parsing an identifier
     let valid_ident_char = |c: char| c.is_ascii_alphabetic() || c == '_';
     let begin = *i;
+    while *i < chars.len() && valid_ident_char(chars[*i]) {
+        *i += 1;
+    }
+    let ident = &str[begin..*i];
+
+    match ident {
+        "define" => {
+            *i += 1;
+            let name = parse_identifier(str, i)?;
+            let value = parse_func(str, i)?;
+            Some(Function::Define(name, Box::new(value)))
+        }
+        "add" => parse_binary_function(str, i, Function::Add),
+        "sub" => parse_binary_function(str, i, Function::Sub),
+        "print" => {
+            *i += 1;
+            let mut args = vec![];
+            while *i < chars.len() && chars[*i] != ')' {
+                args.push(parse_func(str, i)?);
+            }
+            Some(Function::Print(args))
+        }
+        "equal" => parse_binary_function(str, i, Function::Equal),
+        "notequal" => parse_binary_function(str, i, Function::NotEqual),
+        "less" => parse_binary_function(str, i, Function::Less),
+        "more" => parse_binary_function(str, i, Function::More),
+        "for" => {
+            *i += 1;
+            let init = parse_func(str, i)?;
+            let condition = parse_func(str, i)?;
+            let increment = parse_func(str, i)?;
+            let mut body = vec![];
+            while *i < chars.len() && chars[*i] != ')' {
+                body.push(parse_func(str, i)?);
+            }
+            Some(Function::For(
+                Box::new(init),
+                Box::new(condition),
+                Box::new(increment),
+                body,
+            ))
+        }
+        "if" => {
+            *i += 1;
+            let condition = parse_func(str, i)?;
+            let mut body = vec![];
+            while *i < chars.len() && chars[*i] != ')' {
+                body.push(parse_func(str, i)?);
+            }
+            Some(Function::If(Box::new(condition), body))
+        }
+        _ => Some(Function::Ident(ident.to_string())),
+    }
+}
+
+fn parse_binary_function(
+    str: &str,
+    i: &mut usize,
+    constructor: fn(Box<Function>, Box<Function>) -> Function,
+) -> Option<Function> {
+    *i += 1;
+    let left = parse_func(str, i)?;
+    let right = parse_func(str, i)?;
+    Some(constructor(Box::new(left), Box::new(right)))
+}
+
+fn parse_identifier(str: &str, i: &mut usize) -> Option<String> {
+    let chars: Vec<_> = str.chars().collect();
+    let valid_ident_char = |c: char| c.is_ascii_alphabetic() || c == '_';
+    let start = *i;
 
     while *i < chars.len() && valid_ident_char(chars[*i]) {
         *i += 1;
     }
 
-    let ident = &str[begin..*i];
-
-    // If the identifier is empty, return None to signal no more valid content to parse
-    if ident.is_empty() {
-        return None;
-    }
-
-    match ident {
-        "define" => {
-            *i += 1;
-            // Find the closing parenthesis after the "define" arguments
-            if let Some(pos) = str[*i..].find(')') {
-                let closing = pos + *i;
-                let args: Vec<_> = str[*i..closing].split_whitespace().collect();
-                *i += args[0].len() + 1;
-                Some(Function::Define(
-                    args[0].to_string(),
-                    Box::new(parse_func(str, i)?),
-                ))
-            } else {
-                None // If we don't find a closing parenthesis, return None
-            }
-        }
-        "add" => {
-            *i += 1;
-        }
-        _ => None,
+    if start == *i {
+        None
+    } else {
+        Some(str[start..*i].to_string())
     }
 }
 
@@ -206,21 +193,20 @@ fn parse(str: String) -> Vec<Function> {
     }
     fs
 }
+
+fn run(module: Vec<Function>) {
+    let mut vars = HashMap::new();
+    for func in module {
+        eval_func(&mut vars, func);
+    }
+    dbg!(vars);
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
-    let source = "define(a 69)";
-    let program = parse(source.to_string());
-    dbg!(program);
-    // let program = vec![
-    //     func!(@define "a" func!(5)),
-    //     func!(if!(
-    //             func!(equal!(func!(5), ident!("a"))),
-    //             func!(print!(func!(69)))
-    //         )
-    //     ),
-    // func!(for!(func!(5), func!(print!(ident!("_i"))))),
-    // func!(@define "b" func!(add!(ident!("a"), func!(10)))),
-    // func!(print!(ident!("a"), ident!("b"))),
-    // ];
-    // run(program);
+    let mut args = std::env::args();
+    args.next();
+    let source = read_to_string(args.next().unwrap()).unwrap();
+    let program = parse(source);
+    run(program);
     Ok(())
 }
