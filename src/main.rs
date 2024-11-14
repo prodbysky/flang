@@ -14,40 +14,55 @@ enum Function {
     More(Box<Function>, Box<Function>),
     For(Box<Function>, Box<Function>, Box<Function>, Vec<Function>),
     If(Box<Function>, Vec<Function>),
+    DefineFn(String, Vec<String>, Vec<Function>),
 }
 
-fn eval_func(vars: &mut HashMap<String, i32>, f: Function) -> i32 {
+#[derive(Debug)]
+struct UserFunction {
+    args: Vec<String>,
+    body: Vec<Function>,
+}
+
+fn eval_func(
+    vars: &mut HashMap<String, i32>,
+    user_functions: &mut HashMap<String, UserFunction>,
+    f: Function,
+) -> i32 {
     match f {
         Function::Define(name, func) => {
             if let Function::Number(a) = *func {
                 vars.insert(name, a);
             } else {
-                let value = eval_func(vars, *func);
+                let value = eval_func(vars, user_functions, *func);
                 vars.insert(name, value);
             }
         }
         Function::Number(a) => {
             return a;
         }
-        Function::Add(a, b) => return eval_func(vars, *a) + eval_func(vars, *b),
-        Function::Sub(a, b) => return eval_func(vars, *a) - eval_func(vars, *b),
+        Function::Add(a, b) => {
+            return eval_func(vars, user_functions, *a) + eval_func(vars, user_functions, *b)
+        }
+        Function::Sub(a, b) => {
+            return eval_func(vars, user_functions, *a) - eval_func(vars, user_functions, *b)
+        }
         Function::Ident(name) => return *vars.get(&name).unwrap(),
         Function::Print(values) => {
             for val in values {
-                print!("{} ", eval_func(vars, val));
+                print!("{} ", eval_func(vars, user_functions, val));
             }
             println!();
         }
         Function::For(begin, end, increment, body) => {
-            let mut counter = eval_func(vars, *begin);
-            let end = eval_func(vars, *end);
-            let increment = eval_func(vars, *increment);
+            let mut counter = eval_func(vars, user_functions, *begin);
+            let end = eval_func(vars, user_functions, *end);
+            let increment = eval_func(vars, user_functions, *increment);
 
             vars.insert(String::from("_i"), counter);
 
             while counter < end {
                 for f in &body {
-                    eval_func(vars, f.clone());
+                    eval_func(vars, user_functions, f.clone());
                 }
                 counter += increment;
                 vars.insert(String::from("_i"), counter);
@@ -55,23 +70,30 @@ fn eval_func(vars: &mut HashMap<String, i32>, f: Function) -> i32 {
             vars.remove(&String::from("_i"));
         }
         Function::Equal(a, b) => {
-            return (eval_func(vars, *a) == eval_func(vars, *b)) as i32;
+            return (eval_func(vars, user_functions, *a) == eval_func(vars, user_functions, *b))
+                as i32;
         }
         Function::NotEqual(a, b) => {
-            return (eval_func(vars, *a) != eval_func(vars, *b)) as i32;
+            return (eval_func(vars, user_functions, *a) != eval_func(vars, user_functions, *b))
+                as i32;
         }
         Function::Less(a, b) => {
-            return (eval_func(vars, *a) < eval_func(vars, *b)) as i32;
+            return (eval_func(vars, user_functions, *a) < eval_func(vars, user_functions, *b))
+                as i32;
         }
         Function::More(a, b) => {
-            return (eval_func(vars, *a) > eval_func(vars, *b)) as i32;
+            return (eval_func(vars, user_functions, *a) > eval_func(vars, user_functions, *b))
+                as i32;
         }
         Function::If(condition, body) => {
-            if eval_func(vars, *condition) != 0 {
+            if eval_func(vars, user_functions, *condition) != 0 {
                 for f in &body {
-                    eval_func(vars, f.clone());
+                    eval_func(vars, user_functions, f.clone());
                 }
             }
+        }
+        Function::DefineFn(name, args, body) => {
+            user_functions.insert(name, UserFunction { args, body });
         }
     };
 
@@ -80,10 +102,12 @@ fn eval_func(vars: &mut HashMap<String, i32>, f: Function) -> i32 {
 
 fn run(module: Vec<Function>) {
     let mut vars = HashMap::new();
+    let mut user_functions = HashMap::new();
     for func in module {
-        eval_func(&mut vars, func);
+        eval_func(&mut vars, &mut user_functions, func);
     }
     dbg!(vars);
+    dbg!(user_functions);
 }
 
 macro_rules! ident {
@@ -130,11 +154,19 @@ macro_rules! func {
     };
     (if!($condition:expr, $($f:expr),* $(,)?)) => {
         Function::If(Box::new($condition), vec![$($f),*])
+    };
+    (define_fn!($name: literal, args!($($arg:literal),* $(,)?), $($f:expr),* $(,)?)) => {
+        Function::DefineFn(String::from($name), vec![$(String::from($arg)),*], vec![$($f),*])
     }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     let program = vec![
+        func!(define_fn!(
+            "funny",
+            args!("num"),
+            func!(print!(ident!("num")))
+        )),
         func!(@define "a" func!(5)),
         func!(if!(
                 func!(equal!(func!(5), ident!("a"))),
