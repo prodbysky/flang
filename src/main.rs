@@ -16,15 +16,9 @@ enum Function {
     If(Box<Function>, Vec<Function>),
 }
 
-#[derive(Debug, Clone)]
-struct UserFunction {
-    args: Vec<String>,
-    body: Vec<Function>,
-}
 
 fn eval_func(
     vars: &mut HashMap<String, i32>,
-    user_functions: &mut HashMap<String, UserFunction>,
     f: Function,
 ) -> i32 {
     match f {
@@ -32,7 +26,7 @@ fn eval_func(
             if let Function::Number(a) = *func {
                 vars.insert(name, a);
             } else {
-                let value = eval_func(vars, user_functions, *func);
+                let value = eval_func(vars, *func);
                 vars.insert(name, value);
             }
         }
@@ -40,28 +34,28 @@ fn eval_func(
             return a;
         }
         Function::Add(a, b) => {
-            return eval_func(vars, user_functions, *a) + eval_func(vars, user_functions, *b)
+            return eval_func(vars, *a) + eval_func(vars, *b)
         }
         Function::Sub(a, b) => {
-            return eval_func(vars, user_functions, *a) - eval_func(vars, user_functions, *b)
+            return eval_func(vars, *a) - eval_func(vars, *b)
         }
         Function::Ident(name) => return *vars.get(&name).unwrap(),
         Function::Print(values) => {
             for val in values {
-                print!("{} ", eval_func(vars, user_functions, val));
+                print!("{} ", eval_func(vars, val));
             }
             println!();
         }
         Function::For(begin, end, increment, body) => {
-            let mut counter = eval_func(vars, user_functions, *begin);
-            let end = eval_func(vars, user_functions, *end);
-            let increment = eval_func(vars, user_functions, *increment);
+            let mut counter = eval_func(vars, *begin);
+            let end = eval_func(vars, *end);
+            let increment = eval_func(vars, *increment);
 
             vars.insert(String::from("_i"), counter);
 
             while counter < end {
                 for f in &body {
-                    eval_func(vars, user_functions, f.clone());
+                    eval_func(vars, f.clone());
                 }
                 counter += increment;
                 vars.insert(String::from("_i"), counter);
@@ -69,25 +63,25 @@ fn eval_func(
             vars.remove(&String::from("_i"));
         }
         Function::Equal(a, b) => {
-            return (eval_func(vars, user_functions, *a) == eval_func(vars, user_functions, *b))
+            return (eval_func(vars, *a) == eval_func(vars, *b))
                 as i32;
         }
         Function::NotEqual(a, b) => {
-            return (eval_func(vars, user_functions, *a) != eval_func(vars, user_functions, *b))
+            return (eval_func(vars, *a) != eval_func(vars, *b))
                 as i32;
         }
         Function::Less(a, b) => {
-            return (eval_func(vars, user_functions, *a) < eval_func(vars, user_functions, *b))
+            return (eval_func(vars, *a) < eval_func(vars, *b))
                 as i32;
         }
         Function::More(a, b) => {
-            return (eval_func(vars, user_functions, *a) > eval_func(vars, user_functions, *b))
+            return (eval_func(vars, *a) > eval_func(vars, *b))
                 as i32;
         }
         Function::If(condition, body) => {
-            if eval_func(vars, user_functions, *condition) != 0 {
+            if eval_func(vars, *condition) != 0 {
                 for f in &body {
-                    eval_func(vars, user_functions, f.clone());
+                    eval_func(vars, f.clone());
                 }
             }
         }
@@ -98,12 +92,10 @@ fn eval_func(
 
 fn run(module: Vec<Function>) {
     let mut vars = HashMap::new();
-    let mut user_functions = HashMap::new();
     for func in module {
-        eval_func(&mut vars, &mut user_functions, func);
+        eval_func(&mut vars, func);
     }
     dbg!(vars);
-    dbg!(user_functions);
 }
 
 macro_rules! ident {
