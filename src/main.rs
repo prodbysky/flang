@@ -16,11 +16,7 @@ enum Function {
     If(Box<Function>, Vec<Function>),
 }
 
-
-fn eval_func(
-    vars: &mut HashMap<String, i32>,
-    f: Function,
-) -> i32 {
+fn eval_func(vars: &mut HashMap<String, i32>, f: Function) -> i32 {
     match f {
         Function::Define(name, func) => {
             if let Function::Number(a) = *func {
@@ -33,12 +29,8 @@ fn eval_func(
         Function::Number(a) => {
             return a;
         }
-        Function::Add(a, b) => {
-            return eval_func(vars, *a) + eval_func(vars, *b)
-        }
-        Function::Sub(a, b) => {
-            return eval_func(vars, *a) - eval_func(vars, *b)
-        }
+        Function::Add(a, b) => return eval_func(vars, *a) + eval_func(vars, *b),
+        Function::Sub(a, b) => return eval_func(vars, *a) - eval_func(vars, *b),
         Function::Ident(name) => return *vars.get(&name).unwrap(),
         Function::Print(values) => {
             for val in values {
@@ -63,20 +55,16 @@ fn eval_func(
             vars.remove(&String::from("_i"));
         }
         Function::Equal(a, b) => {
-            return (eval_func(vars, *a) == eval_func(vars, *b))
-                as i32;
+            return (eval_func(vars, *a) == eval_func(vars, *b)) as i32;
         }
         Function::NotEqual(a, b) => {
-            return (eval_func(vars, *a) != eval_func(vars, *b))
-                as i32;
+            return (eval_func(vars, *a) != eval_func(vars, *b)) as i32;
         }
         Function::Less(a, b) => {
-            return (eval_func(vars, *a) < eval_func(vars, *b))
-                as i32;
+            return (eval_func(vars, *a) < eval_func(vars, *b)) as i32;
         }
         Function::More(a, b) => {
-            return (eval_func(vars, *a) > eval_func(vars, *b))
-                as i32;
+            return (eval_func(vars, *a) > eval_func(vars, *b)) as i32;
         }
         Function::If(condition, body) => {
             if eval_func(vars, *condition) != 0 {
